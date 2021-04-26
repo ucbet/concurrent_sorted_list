@@ -34,19 +34,19 @@ func NewInt() *IntList {
 func (l *IntList) Insert(value int) bool {
 	for {
 		// 原子找到value需要插入的位置
-		a := atomicNode(l.head)
-		b := atomicNode(a.next)
+		a := atomicNode(&l.head)
+		b := atomicNode(&a.next)
 
 		for b != nil &&
 			atomicInt32(&b.value) < value {
 			a = b
-			b = atomicNode(a.next)
+			b = atomicNode(&a.next)
 		}
 
 		a.mtx.Lock()
 		// 如果a.next不为b或a已经被标记删除了，自旋
-		if atomicNode(a.next) !=
-			atomicNode(b) ||
+		if atomicNode(&a.next) !=
+			atomicNode(&b) ||
 			atomicInt32(&a.change) == changed {
 			a.mtx.Unlock()
 			continue
@@ -73,13 +73,13 @@ func (l *IntList) Insert(value int) bool {
 func (l *IntList) Delete(value int) bool {
 	for {
 		// 原子找到value需要插入的位置
-		a := atomicNode(l.head)
-		b := atomicNode(a.next)
+		a := atomicNode(&l.head)
+		b := atomicNode(&a.next)
 
 		for b != nil &&
 			atomicInt32(&b.value) < value {
 			a = b
-			b = atomicNode(a.next)
+			b = atomicNode(&a.next)
 		}
 		// 遍历到最后仍找不到value直接返回false
 		if b == nil {
@@ -94,7 +94,7 @@ func (l *IntList) Delete(value int) bool {
 		}
 		// 如果a.next不为b或a已经被标记删除了，自旋
 		a.mtx.Lock()
-		if atomicNode(a.next) != b ||
+		if atomicNode(&a.next) != b ||
 			atomicInt32(&a.change) == changed {
 			a.mtx.Unlock()
 			b.mtx.Unlock()
@@ -121,24 +121,24 @@ func (l *IntList) Delete(value int) bool {
 
 func (l *IntList) Contains(value int) bool {
 	// 从第一个节点并依次原子遍历
-	head := atomicNode(l.head.next)
+	head := atomicNode(&l.head.next)
 	for head != nil && atomicInt32(&head.value) <= value {
 		if atomicInt32(&head.value) == value {
 			return true
 		}
-		head = atomicNode(head.next)
+		head = atomicNode(&head.next)
 	}
 	return false
 }
 
 func (l *IntList) Range(f func(value int) bool) {
 
-	head := atomicNode(l.head.next)
+	head := atomicNode(&l.head.next)
 	for head != nil {
 		if !f(atomicInt32(&head.value)) {
 			break
 		}
-		head = atomicNode(head.next)
+		head = atomicNode(&head.next)
 	}
 }
 
@@ -147,8 +147,8 @@ func (l *IntList) Len() int {
 }
 
 //原子读node
-func atomicNode(node *intNode) *intNode {
-	return (*intNode)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&node))))
+func atomicNode(node **intNode) *intNode {
+	return (*intNode)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(node))))
 }
 
 //原子读value
