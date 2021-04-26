@@ -38,7 +38,7 @@ func (l *IntList) Insert(value int) bool {
 		b := atomicNode(a.next)
 
 		for b != nil &&
-			atomicInt32(b.value) < value {
+			atomicInt32(&b.value) < value {
 			a = b
 			b = atomicNode(a.next)
 		}
@@ -47,12 +47,12 @@ func (l *IntList) Insert(value int) bool {
 		// 如果a.next不为b或a已经被标记删除了，自旋
 		if atomicNode(a.next) !=
 			atomicNode(b) ||
-			atomicInt32(a.change) == changed {
+			atomicInt32(&a.change) == changed {
 			a.mtx.Unlock()
 			continue
 		}
 		// 如果当前b的值与value相同，直接返回false，保证相同的值不重复插入
-		if b != nil && atomicInt32(b.value) == value {
+		if b != nil && atomicInt32(&b.value) == value {
 			a.mtx.Unlock()
 			return false
 		}
@@ -77,7 +77,7 @@ func (l *IntList) Delete(value int) bool {
 		b := atomicNode(a.next)
 
 		for b != nil &&
-			atomicInt32(b.value) < value {
+			atomicInt32(&b.value) < value {
 			a = b
 			b = atomicNode(a.next)
 		}
@@ -88,20 +88,20 @@ func (l *IntList) Delete(value int) bool {
 
 		// 锁定b节点，如果b被删除了，自旋
 		b.mtx.Lock()
-		if atomicInt32(b.change) == changed {
+		if atomicInt32(&b.change) == changed {
 			b.mtx.Unlock()
 			continue
 		}
 		// 如果a.next不为b或a已经被标记删除了，自旋
 		a.mtx.Lock()
 		if atomicNode(a.next) != b ||
-			atomicInt32(a.change) == changed {
+			atomicInt32(&a.change) == changed {
 			a.mtx.Unlock()
 			b.mtx.Unlock()
 			continue
 		}
 		// 如果b节点的值不是value，找不到要删除的节点，返回false
-		if atomicInt32(b.value) != value {
+		if atomicInt32(&b.value) != value {
 			a.mtx.Unlock()
 			b.mtx.Unlock()
 			return false
@@ -122,8 +122,8 @@ func (l *IntList) Delete(value int) bool {
 func (l *IntList) Contains(value int) bool {
 	// 从第一个节点并依次原子遍历
 	head := atomicNode(l.head.next)
-	for head != nil && atomicInt32(head.value) <= value {
-		if atomicInt32(head.value) == value {
+	for head != nil && atomicInt32(&head.value) <= value {
+		if atomicInt32(&head.value) == value {
 			return true
 		}
 		head = atomicNode(head.next)
@@ -135,7 +135,7 @@ func (l *IntList) Range(f func(value int) bool) {
 
 	head := atomicNode(l.head.next)
 	for head != nil {
-		if !f(atomicInt32(head.value)) {
+		if !f(atomicInt32(&head.value)) {
 			break
 		}
 		head = atomicNode(head.next)
@@ -143,7 +143,7 @@ func (l *IntList) Range(f func(value int) bool) {
 }
 
 func (l *IntList) Len() int {
-	return atomicInt32(l.length)
+	return atomicInt32(&l.length)
 }
 
 //原子读node
@@ -152,6 +152,6 @@ func atomicNode(node *intNode) *intNode {
 }
 
 //原子读value
-func atomicInt32(value int) int {
-	return int(atomic.LoadInt32((*int32)(unsafe.Pointer(&value))))
+func atomicInt32(value *int) int {
+	return int(atomic.LoadInt32((*int32)(unsafe.Pointer(value))))
 }
